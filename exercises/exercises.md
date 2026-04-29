@@ -48,70 +48,123 @@ Crie uma tabela calculada chamada LapTimes com as colunas:
 
 ---
 
-## Exercicio 2: Telemetria da Volta Mais Rapida para Graficos e Cards
+## Exercicio 2: Criar Tabela de Resumo por Piloto
 
 ### Objetivo
-Criar uma tabela com os pontos de telemetria apenas da volta mais rapida de cada piloto na corrida.
+Criar uma tabela com indicadores consolidados por piloto, sessao e GP para alimentar os cards executivos do painel de visao geral.
 
 ### Requisitos
-Crie uma tabela calculada chamada FastestLapTelemetry contendo:
-- todas as colunas de Telemetry
-- lap_time_s
-- lap_rank_per_driver
-- lap_progress_pct
+Crie uma tabela calculada chamada DriverSummary com as colunas:
+- grand_prix
+- session
+- driver
+- total_laps
+- avg_speed_kmh
+- top_speed_kmh
+- max_throttle_pct
+- brake_samples
+- avg_lap_time_s
 
 ### Regras
-1. Use LapTimes como base.
-2. Considere somente session igual a Race.
-3. Para cada piloto, mantenha apenas a volta com menor lap_time_s.
-4. Inclua lap_progress_pct como rel_distance multiplicado por 100.
+1. Use a tabela LapTimes criada no Exercicio 1 como base.
+2. Mantenha uma linha por piloto, sessao e GP.
+3. Arredonde as metricas numericas para 3 casas decimais.
 
 ### Entregaveis
-1. DAX da tabela FastestLapTelemetry.
-2. Visual de tabela com contagem de pontos por piloto.
-3. Um card com piloto e tempo da volta mais rapida geral da corrida.
+1. DAX da tabela DriverSummary.
+2. Cards no relatorio para mostrar: melhor media de velocidade, maior velocidade maxima e menor tempo medio de volta.
 
 ---
 
-## Exercicio 3: Mapa do Circuito com Scatter (X e Y)
+## Exercicio 3: Criar Tabela da Volta Mais Rapida
 
 ### Objetivo
-Usar x e y da telemetria para montar o mapa do circuito em um grafico de dispersao.
+Criar uma tabela com os pontos de telemetria da volta mais rapida para montar os graficos de velocidade, throttle, brake e DRS.
 
 ### Requisitos
-Crie uma tabela calculada chamada CircuitMapPoints com:
+Crie uma tabela calculada chamada FastestLapTelemetry com as colunas:
 - grand_prix
 - session
 - driver
 - lap
-- x
-- y
+- time
+- distance
+- rel_distance
 - speed
 - throttle
 - brake
-- lap_progress_pct
-- time
+- drs
+- x
+- y
+- z
 
 ### Regras
-1. Baseie-se na tabela FastestLapTelemetry.
-2. Permita duas abordagens:
-- apenas o piloto com melhor volta geral
-- todos os pilotos, usando cor por piloto
-3. Ordene os pontos por time para preservar o trajeto da volta.
+1. Identifique a volta com menor lap_time_s na tabela LapTimes.
+2. Filtre a tabela Telemetry para retornar apenas os registros dessa volta.
+3. Ordene a visualizacao por time ou distance, conforme o grafico.
+4. Arredonde as metricas numericas para 3 casas decimais.
 
 ### Entregaveis
-1. DAX da tabela CircuitMapPoints.
-2. Grafico Scatter com:
-- eixo X: x
-- eixo Y: y
-- cor: speed ou driver
-- dica: se o circuito parecer espelhado, testar inverter o eixo Y no visual
+1. DAX da tabela FastestLapTelemetry.
+2. Grafico de linha para speed e throttle ao longo da volta.
+3. Grafico adicional para brake e DRS.
+4. Base para o mapa do circuito com x e y.
 
 ---
 
-## Bonus (Opcional)
+## Exercicio 4: Criar Tabela para Mapa do Circuito
 
-1. Criar tabela DriverFastestLapCard com uma linha por piloto:
-- driver, nome completo, equipe, melhor volta, velocidade maxima na melhor volta
-2. Criar tabela RaceFastestLapCard com uma unica linha:
-- piloto mais rapido da corrida, numero da volta, tempo da volta
+### Objetivo
+Criar uma tabela de pontos espaciais para desenhar o traçado do circuito usando as coordenadas x e y.
+
+### Requisitos
+Crie uma tabela calculada chamada CircuitMap com as colunas:
+- grand_prix
+- session
+- driver
+- lap
+- distance
+- x
+- y
+- z
+- speed_kmh
+
+### Regras
+1. Use a tabela FastestLapTelemetry como base.
+2. Inverta o eixo y se necessario para reproduzir o sentido do circuito.
+3. Remova registros com x ou y em branco.
+4. Arredonde as metricas numericas para 3 casas decimais.
+
+### Entregaveis
+1. DAX da tabela CircuitMap.
+2. Scatter plot com x e y representando o mapa do circuito.
+3. Cor do ponto baseada em speed_kmh ou driver.
+
+---
+
+## Exercicio 5: Criar Tabela de Comparativo entre Pilotos
+
+### Objetivo
+Criar uma tabela para comparar o ritmo medio e o melhor tempo de volta entre pilotos na mesma sessao.
+
+### Requisitos
+Crie uma tabela calculada chamada DriverBattle com as colunas:
+- grand_prix
+- session
+- driver
+- best_lap_time_s
+- avg_lap_time_s
+- lap_count
+- avg_speed_kmh
+- delta_to_session_best_s
+
+### Regras
+1. Use a tabela LapTimes como base.
+2. Mantenha uma linha por piloto, sessao e GP.
+3. delta_to_session_best_s deve medir a diferenca do melhor tempo do piloto para o melhor tempo da sessao.
+4. Arredonde as metricas numericas para 3 casas decimais.
+
+### Entregaveis
+1. DAX da tabela DriverBattle.
+2. Visual de matriz ou tabela com ranking de pilotos por sessao.
+3. Grafico para comparar ritmo e delta em relacao ao melhor da sessao.

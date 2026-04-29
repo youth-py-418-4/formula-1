@@ -17,29 +17,17 @@ Crie a tabela calculada LapTimes:
 
 ```DAX
 LapTimes =
-VAR Base =
     SUMMARIZE(
         Telemetry,
         Telemetry[grand_prix],
         Telemetry[session],
         Telemetry[driver],
         Telemetry[lap],
-        "lap_time_s_raw", MAX(Telemetry[time]) - MIN(Telemetry[time]),
-        "avg_speed_kmh_raw", AVERAGE(Telemetry[speed]),
-        "top_speed_kmh_raw", MAX(Telemetry[speed]),
-        "max_throttle_pct_raw", MAX(Telemetry[throttle]),
+        "lap_time_s", MAX(Telemetry[time]),
+        "avg_speed_kmh", AVERAGE(Telemetry[speed]),
+        "top_speed_kmh", MAX(Telemetry[speed]),
+        "max_throttle_pct", MAX(Telemetry[throttle]),
         "brake_samples", SUMX(Telemetry, IF(Telemetry[brake] > 0, 1, 0))
-    )
-RETURN
-    FILTER(
-        ADDCOLUMNS(
-            Base,
-            "lap_time_s", ROUND([lap_time_s_raw], 3),
-            "avg_speed_kmh", ROUND([avg_speed_kmh_raw], 3),
-            "top_speed_kmh", ROUND([top_speed_kmh_raw], 3),
-            "max_throttle_pct", ROUND([max_throttle_pct_raw], 3)
-        ),
-        [lap_time_s_raw] > 0
     )
 ```
 
@@ -50,167 +38,166 @@ Validacao sugerida no relatorio:
 - Visual de tabela com grand_prix, session, driver, lap, lap_time_s.
 - Ordenar por lap_time_s ascendente e mostrar Top N = 10.
 
-## 2) Solucao do Exercicio 2: FastestLapTelemetry
+## 2) Solucao do Exercicio 2: tabela DriverSummary
 
-Passo 1. Criar tabela auxiliar com ranking da melhor volta por piloto na corrida:
+Crie a tabela calculada DriverSummary:
 
 ```DAX
-RaceLapRank =
-VAR RaceLaps =
-    FILTER(LapTimes, LapTimes[session] = "Race")
+DriverSummary =
+VAR Base =
+    SUMMARIZE(
+        LapTimes,
+        LapTimes[grand_prix],
+        LapTimes[session],
+        LapTimes[driver]
+    )
 RETURN
-    ADDCOLUMNS(
-        RaceLaps,
-        "lap_rank_per_driver",
-            RANKX(
-                FILTER(
-                    RaceLaps,
-                    [grand_prix] = EARLIER([grand_prix])
-                        && [session] = EARLIER([session])
-                        && [driver] = EARLIER([driver])
-                ),
-                [lap_time_s],
-                ,
-                ASC,
-                DENSE
-            )
+    FILTER(
+        ADDCOLUMNS(
+            Base,
+            "total_laps", CALCULATE(COUNTROWS(LapTimes)),
+            "avg_speed_kmh", ROUND(CALCULATE(AVERAGE(LapTimes[avg_speed_kmh])), 3),
+            "top_speed_kmh", ROUND(CALCULATE(MAX(LapTimes[top_speed_kmh])), 3),
+            "max_throttle_pct", ROUND(CALCULATE(MAX(LapTimes[max_throttle_pct])), 3),
+            "brake_samples", CALCULATE(SUM(LapTimes[brake_samples])),
+            "avg_lap_time_s", ROUND(CALCULATE(AVERAGE(LapTimes[lap_time_s])), 3)
+        ),
+        [total_laps] > 0
     )
 ```
 
-Passo 2. Criar a tabela com telemetria somente da volta rank 1:
+Observacao didatica:
+- Essa tabela funciona bem para cards executivos, porque resume a performance do piloto por sessao.
+
+Validacao sugerida no relatorio:
+- Cards com avg_speed_kmh, top_speed_kmh e avg_lap_time_s.
+- Tabela por driver para conferir os totais.
+
+## 3) Solucao do Exercicio 3: tabela FastestLapTelemetry
+
+Crie a tabela calculada FastestLapTelemetry:
 
 ```DAX
 FastestLapTelemetry =
-VAR BestLaps =
-    FILTER(RaceLapRank, [lap_rank_per_driver] = 1)
-RETURN
-    NATURALINNERJOIN(
-        ADDCOLUMNS(
-            Telemetry,
-            "lap_progress_pct", ROUND(Telemetry[rel_distance] * 100, 3)
-        ),
-        SELECTCOLUMNS(
-            BestLaps,
-            "grand_prix", [grand_prix],
-            "session", [session],
-            "driver", [driver],
-            "lap", [lap],
-            "lap_time_s", [lap_time_s],
-            "lap_rank_per_driver", [lap_rank_per_driver]
-        )
-    )
-```
-
-Validacao 1: pontos de telemetria por piloto
-
-```DAX
-TelemetryPoints = COUNTROWS(FastestLapTelemetry)
-```
-
-Coloque driver em linhas e a medida TelemetryPoints em valores.
-
-Validacao 2: card para melhor volta geral da corrida
-
-```DAX
-BestLapTimeRace =
-MINX(
-    FILTER(LapTimes, LapTimes[session] = "Race"),
-    LapTimes[lap_time_s]
-)
-```
-
-```DAX
-BestDriverRace =
-VAR T =
+VAR BestLapRow =
     TOPN(
         1,
-        FILTER(LapTimes, LapTimes[session] = "Race"),
-        LapTimes[lap_time_s], ASC
+        FILTER(
+            LapTimes,
+            LapTimes[lap_time_s] > 0
+        ),
+        LapTimes[lap_time_s], ASC,
+        LapTimes[grand_prix], ASC,
+        LapTimes[session], ASC,
+        LapTimes[driver], ASC,
+        LapTimes[lap], ASC
     )
+VAR BestGrandPrix = MAXX(BestLapRow, LapTimes[grand_prix])
+VAR BestSession = MAXX(BestLapRow, LapTimes[session])
+VAR BestDriver = MAXX(BestLapRow, LapTimes[driver])
+VAR BestLap = MAXX(BestLapRow, LapTimes[lap])
 RETURN
-    MAXX(T, LapTimes[driver])
+    SELECTCOLUMNS(
+        FILTER(
+            Telemetry,
+            Telemetry[grand_prix] = BestGrandPrix &&
+            Telemetry[session] = BestSession &&
+            Telemetry[driver] = BestDriver &&
+            Telemetry[lap] = BestLap
+        ),
+        "grand_prix", Telemetry[grand_prix],
+        "session", Telemetry[session],
+        "driver", Telemetry[driver],
+        "lap", Telemetry[lap],
+        "time", ROUND(Telemetry[time], 3),
+        "distance", ROUND(Telemetry[distance], 3),
+        "rel_distance", ROUND(Telemetry[rel_distance], 3),
+        "speed", ROUND(Telemetry[speed], 3),
+        "throttle", ROUND(Telemetry[throttle], 3),
+        "brake", ROUND(Telemetry[brake], 3),
+        "drs", ROUND(Telemetry[drs], 3),
+        "x", ROUND(Telemetry[x], 3),
+        "y", ROUND(Telemetry[y], 3),
+        "z", ROUND(Telemetry[z], 3)
+    )
 ```
 
-## 3) Solucao do Exercicio 3: CircuitMapPoints para scatter
+Observacao didatica:
+- Use essa tabela para os graficos de linha e area da volta mais rapida.
 
-Crie a tabela calculada:
+Validacao sugerida no relatorio:
+- Grafico de linha com time no eixo X e speed no eixo Y.
+- Grafico com throttle e brake na mesma pagina.
+
+## 4) Solucao do Exercicio 4: tabela CircuitMap
+
+Crie a tabela calculada CircuitMap:
 
 ```DAX
-CircuitMapPoints =
+CircuitMap =
 SELECTCOLUMNS(
-    FastestLapTelemetry,
+    FILTER(
+        FastestLapTelemetry,
+        NOT ISBLANK([x]) && NOT ISBLANK([y])
+    ),
     "grand_prix", [grand_prix],
     "session", [session],
     "driver", [driver],
     "lap", [lap],
-    "x", [x],
-    "y", [y],
-    "speed", [speed],
-    "throttle", [throttle],
-    "brake", [brake],
-    "lap_progress_pct", [lap_progress_pct],
-    "time", [time]
+    "distance", ROUND([distance], 3),
+    "x", ROUND([x], 3),
+    "y", ROUND([y] * -1, 3),
+    "z", ROUND([z], 3),
+    "speed_kmh", ROUND([speed], 3)
 )
 ```
 
-Configuracao do visual Scatter no Power BI:
-1. Eixo X: x
-2. Eixo Y: y
-3. Legenda: driver ou faixa de speed
-4. Tamanho: opcional (por exemplo throttle)
-5. Tooltip: speed, brake, lap_progress_pct, time
+Observacao didatica:
+- A inversao do eixo y ajuda a reproduzir o sentido visual do traçado da pista no scatter.
 
-Dica importante:
-- No painel de formato, ajuste o eixo Y (inclusive reverso) se o circuito parecer invertido.
-- Use filtro de driver para comparar traçados entre pilotos.
+Validacao sugerida no relatorio:
+- Scatter com x e y e cor por speed_kmh.
+- Ajuste da ordem de camadas para deixar o tracado legivel.
 
-## 4) Bonus: tabelas para cards
+## 5) Solucao do Exercicio 5: tabela DriverBattle
 
-Tabela por piloto com melhor volta:
+Crie a tabela calculada DriverBattle:
 
 ```DAX
-DriverFastestLapCard =
-VAR BestPerDriver =
-    FILTER(RaceLapRank, [lap_rank_per_driver] = 1)
+DriverBattle =
+VAR Base =
+    SUMMARIZE(
+        LapTimes,
+        LapTimes[grand_prix],
+        LapTimes[session],
+        LapTimes[driver]
+    )
 RETURN
-    NATURALLEFTOUTERJOIN(
-        SELECTCOLUMNS(
-            BestPerDriver,
-            "driver", [driver],
-            "grand_prix", [grand_prix],
-            "session", [session],
-            "lap", [lap],
-            "lap_time_s", [lap_time_s],
-            "top_speed_kmh", [top_speed_kmh]
-        ),
-        SELECTCOLUMNS(
-            Drivers,
-            "driver", Drivers[driver],
-            "full_name", Drivers[fn] & " " & Drivers[ln],
-            "team", Drivers[team]
-        )
+    ADDCOLUMNS(
+        Base,
+        "best_lap_time_s", ROUND(CALCULATE(MIN(LapTimes[lap_time_s])), 3),
+        "avg_lap_time_s", ROUND(CALCULATE(AVERAGE(LapTimes[lap_time_s])), 3),
+        "lap_count", CALCULATE(COUNTROWS(LapTimes)),
+        "avg_speed_kmh", ROUND(CALCULATE(AVERAGE(LapTimes[avg_speed_kmh])), 3),
+        "delta_to_session_best_s",
+            ROUND(
+                CALCULATE(MIN(LapTimes[lap_time_s])) -
+                CALCULATE(
+                    MIN(LapTimes[lap_time_s]),
+                    ALLEXCEPT(
+                        LapTimes,
+                        LapTimes[grand_prix],
+                        LapTimes[session]
+                    )
+                ),
+                3
+            )
     )
 ```
 
-Tabela com melhor volta geral da corrida:
+Observacao didatica:
+- Essa tabela e a base para comparar ritmo entre pilotos na mesma sessao.
 
-```DAX
-RaceFastestLapCard =
-TOPN(
-    1,
-    FILTER(LapTimes, LapTimes[session] = "Race"),
-    LapTimes[lap_time_s], ASC
-)
-```
-
-## 5) Estrutura recomendada de paginas no relatorio
-
-1. Pagina 1: Visao geral da corrida
-- cards de melhor volta
-- tabela Top 10 lap_time_s
-2. Pagina 2: Telemetria da melhor volta
-- linhas de speed por lap_progress_pct
-- linha de throttle e brake
-3. Pagina 3: Mapa do circuito
-- scatter x por y
-- segmentador de piloto
+Validacao sugerida no relatorio:
+- Matriz com driver, best_lap_time_s e delta_to_session_best_s.
+- Ordenacao crescente por best_lap_time_s para destacar o piloto mais rapido.
