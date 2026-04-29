@@ -1,0 +1,4 @@
+data
+*.pbix
+__pycache__
+.env
