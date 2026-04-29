@@ -38,40 +38,40 @@ Validacao sugerida no relatorio:
 - Visual de tabela com grand_prix, session, driver, lap, lap_time_s.
 - Ordenar por lap_time_s ascendente e mostrar Top N = 10.
 
-## 2) Solucao do Exercicio 2: tabela DriverSummary
+## 2) Solucao do Exercicio 2: medidas para cards executivos
 
-Crie a tabela calculada DriverSummary:
+Crie as medidas abaixo:
 
 ```DAX
-DriverSummary =
-VAR Base =
-    SUMMARIZE(
-        LapTimes,
-        LapTimes[grand_prix],
-        LapTimes[session],
-        LapTimes[driver]
+Best Lap Time (s) =
+MIN(LapTimes[lap_time_s])
+
+Average Speed (km/h) =
+AVERAGE(LapTimes[avg_speed_kmh])
+
+Top Speed (km/h) =
+MAX(LapTimes[top_speed_kmh])
+
+Average Lap Time (s) =
+AVERAGE(LapTimes[lap_time_s])
+
+Fastest Driver =
+VAR BestRow =
+    TOPN(
+        1,
+        FILTER(LapTimes, LapTimes[lap_time_s] > 0),
+        LapTimes[lap_time_s], ASC,
+        LapTimes[driver], ASC
     )
 RETURN
-    FILTER(
-        ADDCOLUMNS(
-            Base,
-            "total_laps", CALCULATE(COUNTROWS(LapTimes)),
-            "avg_speed_kmh", ROUND(CALCULATE(AVERAGE(LapTimes[avg_speed_kmh])), 3),
-            "top_speed_kmh", ROUND(CALCULATE(MAX(LapTimes[top_speed_kmh])), 3),
-            "max_throttle_pct", ROUND(CALCULATE(MAX(LapTimes[max_throttle_pct])), 3),
-            "brake_samples", CALCULATE(SUM(LapTimes[brake_samples])),
-            "avg_lap_time_s", ROUND(CALCULATE(AVERAGE(LapTimes[lap_time_s])), 3)
-        ),
-        [total_laps] > 0
-    )
+    MAXX(BestRow, LapTimes[driver])
 ```
 
 Observacao didatica:
-- Essa tabela funciona bem para cards executivos, porque resume a performance do piloto por sessao.
+- Essas medidas funcionam bem para cards executivos, porque respeitam o contexto de filtro da pagina.
 
 Validacao sugerida no relatorio:
-- Cards com avg_speed_kmh, top_speed_kmh e avg_lap_time_s.
-- Tabela por driver para conferir os totais.
+- Cards com Best Lap Time (s), Average Speed (km/h), Top Speed (km/h) e Fastest Driver.
 
 ## 3) Solucao do Exercicio 3: tabela FastestLapTelemetry
 
@@ -129,75 +129,56 @@ Validacao sugerida no relatorio:
 - Grafico de linha com time no eixo X e speed no eixo Y.
 - Grafico com throttle e brake na mesma pagina.
 
-## 4) Solucao do Exercicio 4: tabela CircuitMap
+## 4) Solucao do Exercicio 4: coluna y_inverted
 
-Crie a tabela calculada CircuitMap:
+Adicione uma coluna calculada y_inverted na tabela FastestLapTelemetry:
 
 ```DAX
-CircuitMap =
-SELECTCOLUMNS(
-    FILTER(
-        FastestLapTelemetry,
-        NOT ISBLANK([x]) && NOT ISBLANK([y])
-    ),
-    "grand_prix", [grand_prix],
-    "session", [session],
-    "driver", [driver],
-    "lap", [lap],
-    "distance", ROUND([distance], 3),
-    "x", ROUND([x], 3),
-    "y", ROUND([y] * -1, 3),
-    "z", ROUND([z], 3),
-    "speed_kmh", ROUND([speed], 3)
-)
+y_inverted = -FastestLapTelemetry[y]
 ```
 
 Observacao didatica:
 - A inversao do eixo y ajuda a reproduzir o sentido visual do traçado da pista no scatter.
 
 Validacao sugerida no relatorio:
-- Scatter com x e y e cor por speed_kmh.
+- Scatter com x e y_inverted e cor por speed.
 - Ajuste da ordem de camadas para deixar o tracado legivel.
 
-## 5) Solucao do Exercicio 5: tabela DriverBattle
+## 5) Solucao do Exercicio 5: medidas para comparativo entre pilotos
 
-Crie a tabela calculada DriverBattle:
+Crie as medidas abaixo:
 
 ```DAX
-DriverBattle =
-VAR Base =
-    SUMMARIZE(
-        LapTimes,
-        LapTimes[grand_prix],
-        LapTimes[session],
-        LapTimes[driver]
+Best Lap Time (s) =
+MIN(LapTimes[lap_time_s])
+
+Average Lap Time (s) =
+AVERAGE(LapTimes[lap_time_s])
+
+Lap Count =
+COUNTROWS(LapTimes)
+
+Average Speed (km/h) =
+AVERAGE(LapTimes[avg_speed_kmh])
+
+Delta to Session Best (s) =
+VAR DriverBest = MIN(LapTimes[lap_time_s])
+VAR SessionBest =
+    CALCULATE(
+        MIN(LapTimes[lap_time_s]),
+        ALLEXCEPT(
+            LapTimes,
+            LapTimes[grand_prix],
+            LapTimes[session]
+        )
     )
 RETURN
-    ADDCOLUMNS(
-        Base,
-        "best_lap_time_s", ROUND(CALCULATE(MIN(LapTimes[lap_time_s])), 3),
-        "avg_lap_time_s", ROUND(CALCULATE(AVERAGE(LapTimes[lap_time_s])), 3),
-        "lap_count", CALCULATE(COUNTROWS(LapTimes)),
-        "avg_speed_kmh", ROUND(CALCULATE(AVERAGE(LapTimes[avg_speed_kmh])), 3),
-        "delta_to_session_best_s",
-            ROUND(
-                CALCULATE(MIN(LapTimes[lap_time_s])) -
-                CALCULATE(
-                    MIN(LapTimes[lap_time_s]),
-                    ALLEXCEPT(
-                        LapTimes,
-                        LapTimes[grand_prix],
-                        LapTimes[session]
-                    )
-                ),
-                3
-            )
-    )
+    ROUND(DriverBest - SessionBest, 3)
 ```
 
 Observacao didatica:
-- Essa tabela e a base para comparar ritmo entre pilotos na mesma sessao.
+- Essas medidas funcionam melhor do que uma tabela porque respeitam o filtro de sessao e piloto.
 
 Validacao sugerida no relatorio:
-- Matriz com driver, best_lap_time_s e delta_to_session_best_s.
-- Ordenacao crescente por best_lap_time_s para destacar o piloto mais rapido.
+- Matriz com driver nas linhas e as medidas de best lap, delta e velocidade nos valores.
+- Ordenacao crescente por Best Lap Time (s) para destacar o piloto mais rapido.
